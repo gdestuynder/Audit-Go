@@ -6,7 +6,7 @@ import "unsafe"
 
 type NetlinkAuditRequest struct {
     Header s.NlMsghdr
-    Data   s.RtGenmsg
+    Data   byte  //s.RtGenmsg
 }
 
 func (rr *NetlinkAuditRequest) toWireFormat() []byte {
@@ -16,17 +16,17 @@ func (rr *NetlinkAuditRequest) toWireFormat() []byte {
     *(*uint16)(unsafe.Pointer(&b[6:8][0])) = rr.Header.Flags
     *(*uint32)(unsafe.Pointer(&b[8:12][0])) = rr.Header.Seq
     *(*uint32)(unsafe.Pointer(&b[12:16][0])) = rr.Header.Pid
-    b[16] = byte(rr.Data.Family)
+    //b[16] = byte(rr.Data.Family)
     return b
 }
 
 func newNetlinkAuditRequest(proto, seq, family int) []byte {
     rr := &NetlinkAuditRequest{}
-    rr.Header.Len = uint32(s.NLMSG_HDRLEN + s.SizeofRtGenmsg)
+    rr.Header.Len = uint32(s.NLMSG_HDRLEN) //+ s.SizeofRtGenmsg)
     rr.Header.Type = uint16(proto)
-    rr.Header.Flags = s.MSG_PEEK|s.MSG_DONTWAIT//s.NLM_F_REQUEST //| s.NLM_F_ACK
+    rr.Header.Flags = s.NLM_F_REQUEST//s.MSG_PEEK|s.MSG_DONTWAIT//s.NLM_F_REQUEST //| s.NLM_F_ACK
     rr.Header.Seq = uint32(seq)
-    rr.Data.Family = uint8(family)
+    //rr.Data.Family = uint8(family)
     return rr.toWireFormat()
 }
 
@@ -55,8 +55,8 @@ func main() {
 
     // sendto(fd, &req, req.nlh.nlmsg_len, 0,(struct sockaddr*)&addr, sizeof(addr))
     // sendto(3, "\20\0\0\0\350\3\5\0\1\0\0\0\0\0\0\0", 16, 0, {sa_family=AF_NETLINK, pid=0, groups=00000000}, 12) = 16
-    // sendto(3, "\21\0\0\0\350\3\5\0\1\0\0\0\0\0\0\0\t", 17, 0, {sa_family=AF_NETLINK, pid=0, groups=00000000}, 12) = 17
-    wb := newNetlinkAuditRequest(1000, 1, s.NETLINK_AUDIT)
+    // sendto(3, "\20\0\0\0\350\3\1\0\1\0\0\0\0\0\0\0", 16, 0, {sa_family=AF_NETLINK, pid=0, groups=00000000}, 12) = 16
+    wb := newNetlinkAuditRequest(1120, 1, s.NETLINK_AUDIT)
     if err := s.Sendto(sock, wb, 0, lsa); err != nil {
         fmt.Println("sending error: ", err)
         return
@@ -67,8 +67,9 @@ done:
 
         // recvfrom(fd, &rep->msg, sizeof(rep->msg), block|peek,   (struct sockaddr*)&nladdr, &nladdrlen);
         // recvfrom(3, "$\0\0\0\2\0\0\0\1\0\0\0\234K\0\0\0\0\0\0\20\0\0\0\350\3\5\0\1\0\0\0"..., 8988, MSG_PEEK|MSG_DONTWAIT, {sa_family=AF_NETLINK, pid=0, groups=00000000}, [12]) = 36
-        // recvfrom(3, "$\0\0\0\2\0\0\0\1\0\0\0Pm\0\0\0\0\0\0\21\0\0\0\350\3\5\0\1\0\0\0"..., 4096, 0, {sa_family=AF_NETLINK, pid=0, groups=00000000}, [12]) = 36
+        // recvfrom(3, "0\0\0\0\350\3\0\0\1\0\0\0r\177\0\0\0\0\0\0\0\0\0\0\1\0\0\0\0\0\0\0"..., 8988, MSG_PEEK|MSG_DONTWAIT, {sa_family=AF_NETLINK, pid=0, groups=00000000}, [12]) = 48
         rb := make([]byte, s.Getpagesize())
+
         //nr, _, err := Recvfrom(s, rb, MSG_PEEK|MSG_DONTWAIT)
         nr, _, err := s.Recvfrom(sock, rb, 0)
         if err != nil {
@@ -90,6 +91,8 @@ done:
         }
 
         for _, m := range msgs {
+
+            fmt.Println(m.Header.Pid)
  
             lsa, err := s.Getsockname(sock)
             if err != nil {
