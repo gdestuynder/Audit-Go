@@ -23,8 +23,8 @@ func (rr *NetlinkAuditRequest) toWireFormat() []byte {
 func newNetlinkAuditRequest(proto, seq, family int) []byte {
     rr := &NetlinkAuditRequest{}
     rr.Header.Len = uint32(NLMSG_HDRLEN + SizeofRtGenmsg)
-    rr.Header.Type = uint16(AF_UNSPEC)
-    rr.Header.Flags = NLM_F_REQUEST
+    rr.Header.Type = uint16(proto)
+    rr.Header.Flags = NLM_F_REQUEST//MSG_PEEK|MSG_DONTWAIT//NLM_F_REQUEST //| NLM_F_ACK
     rr.Header.Seq = uint32(seq)
     rr.Data.Family = uint8(family)
     return rr.toWireFormat()
@@ -53,8 +53,10 @@ func main() {
     }
     fmt.Println("**** Starting Netlink")
 
-    // this should be 10 or not??
-    wb := newNetlinkAuditRequest(AF_NETLINK, 1, NETLINK_AUDIT)
+    // sendto(fd, &req, req.nlh.nlmsg_len, 0,(struct sockaddr*)&addr, sizeof(addr))
+    // sendto(3, "\20\0\0\0\350\3\5\0\1\0\0\0\0\0\0\0", 16, 0, {sa_family=AF_NETLINK, pid=0, groups=00000000}, 12) = 16
+    // sendto(3, "\21\0\0\0\350\3\5\0\1\0\0\0\0\0\0\0\t", 17, 0, {sa_family=AF_NETLINK, pid=0, groups=00000000}, 12) = 17
+    wb := newNetlinkAuditRequest(1000, 1, NETLINK_AUDIT)
     if err := Sendto(s, wb, 0, lsa); err != nil {
         fmt.Println("sending error: ", err)
         return
@@ -63,8 +65,12 @@ func main() {
 done:
     for {
 
+        // recvfrom(fd, &rep->msg, sizeof(rep->msg), block|peek,   (struct sockaddr*)&nladdr, &nladdrlen);
+        // recvfrom(3, "$\0\0\0\2\0\0\0\1\0\0\0\234K\0\0\0\0\0\0\20\0\0\0\350\3\5\0\1\0\0\0"..., 8988, MSG_PEEK|MSG_DONTWAIT, {sa_family=AF_NETLINK, pid=0, groups=00000000}, [12]) = 36
+        // recvfrom(3, "$\0\0\0\2\0\0\0\1\0\0\0Pm\0\0\0\0\0\0\21\0\0\0\350\3\5\0\1\0\0\0"..., 4096, 0, {sa_family=AF_NETLINK, pid=0, groups=00000000}, [12]) = 36
         rb := make([]byte, Getpagesize())
-        nr, _, err := Recvfrom(s, rb, 0)
+        nr, _, err := Recvfrom(s, rb, MSG_PEEK|MSG_DONTWAIT)
+        //nr, _, err := Recvfrom(s, rb, 0)
         if err != nil {
             fmt.Println("rec err: ", err)
             return
@@ -90,6 +96,7 @@ done:
                 fmt.Println("get socket name error:", err)
                 return
             }
+
             switch v := lsa.(type) {
             case *SockaddrNetlink:
                 if m.Header.Seq != 1 || m.Header.Pid != v.Pid {
@@ -113,6 +120,6 @@ done:
             }
 
         }
+        fmt.Println(string(tab[:]));
     }
-    fmt.Println(tab);
 }
