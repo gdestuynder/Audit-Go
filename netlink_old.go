@@ -1,12 +1,12 @@
 package main
 
-import . "syscall"
+import s "syscall"
 import "fmt"
 import "unsafe"
 
 type NetlinkAuditRequest struct {
-    Header NlMsghdr
-    Data   RtGenmsg
+    Header s.NlMsghdr
+    Data   s.RtGenmsg
 }
 
 func (rr *NetlinkAuditRequest) toWireFormat() []byte {
@@ -22,31 +22,31 @@ func (rr *NetlinkAuditRequest) toWireFormat() []byte {
 
 func newNetlinkAuditRequest(proto, seq, family int) []byte {
     rr := &NetlinkAuditRequest{}
-    rr.Header.Len = uint32(NLMSG_HDRLEN + SizeofRtGenmsg)
+    rr.Header.Len = uint32(s.NLMSG_HDRLEN + s.SizeofRtGenmsg)
     rr.Header.Type = uint16(proto)
-    rr.Header.Flags = NLM_F_REQUEST//MSG_PEEK|MSG_DONTWAIT//NLM_F_REQUEST //| NLM_F_ACK
+    rr.Header.Flags = s.MSG_PEEK|s.MSG_DONTWAIT//s.NLM_F_REQUEST //| s.NLM_F_ACK
     rr.Header.Seq = uint32(seq)
     rr.Data.Family = uint8(family)
     return rr.toWireFormat()
 }
 
 func nlmAlignOf(msglen int) int {
-    return (msglen + NLMSG_ALIGNTO - 1) & ^(NLMSG_ALIGNTO - 1)
+    return (msglen + s.NLMSG_ALIGNTO - 1) & ^(s.NLMSG_ALIGNTO - 1)
 }
 
 func main() {
 
     // Create a netlink socket
-    s, err := Socket(AF_NETLINK, SOCK_RAW, NETLINK_AUDIT)
+    sock, err := s.Socket(s.AF_NETLINK, s.SOCK_RAW, s.NETLINK_AUDIT)
     if err != nil {
         fmt.Println("scoket error:")
         fmt.Println(err)
         return
     }
-    defer Close(s)
+    defer s.Close(sock)
 
-    lsa := &SockaddrNetlink{Family: AF_NETLINK}
-    if err := Bind(s, lsa); err != nil {
+    lsa := &s.SockaddrNetlink{Family: s.AF_NETLINK}
+    if err := s.Bind(sock, lsa); err != nil {
         fmt.Println("bind error:")
         fmt.Println(err)
         return
@@ -56,8 +56,8 @@ func main() {
     // sendto(fd, &req, req.nlh.nlmsg_len, 0,(struct sockaddr*)&addr, sizeof(addr))
     // sendto(3, "\20\0\0\0\350\3\5\0\1\0\0\0\0\0\0\0", 16, 0, {sa_family=AF_NETLINK, pid=0, groups=00000000}, 12) = 16
     // sendto(3, "\21\0\0\0\350\3\5\0\1\0\0\0\0\0\0\0\t", 17, 0, {sa_family=AF_NETLINK, pid=0, groups=00000000}, 12) = 17
-    wb := newNetlinkAuditRequest(1000, 1, NETLINK_AUDIT)
-    if err := Sendto(s, wb, 0, lsa); err != nil {
+    wb := newNetlinkAuditRequest(1000, 1, s.NETLINK_AUDIT)
+    if err := s.Sendto(sock, wb, 0, lsa); err != nil {
         fmt.Println("sending error: ", err)
         return
     }
@@ -68,21 +68,21 @@ done:
         // recvfrom(fd, &rep->msg, sizeof(rep->msg), block|peek,   (struct sockaddr*)&nladdr, &nladdrlen);
         // recvfrom(3, "$\0\0\0\2\0\0\0\1\0\0\0\234K\0\0\0\0\0\0\20\0\0\0\350\3\5\0\1\0\0\0"..., 8988, MSG_PEEK|MSG_DONTWAIT, {sa_family=AF_NETLINK, pid=0, groups=00000000}, [12]) = 36
         // recvfrom(3, "$\0\0\0\2\0\0\0\1\0\0\0Pm\0\0\0\0\0\0\21\0\0\0\350\3\5\0\1\0\0\0"..., 4096, 0, {sa_family=AF_NETLINK, pid=0, groups=00000000}, [12]) = 36
-        rb := make([]byte, Getpagesize())
-        nr, _, err := Recvfrom(s, rb, MSG_PEEK|MSG_DONTWAIT)
-        //nr, _, err := Recvfrom(s, rb, 0)
+        rb := make([]byte, s.Getpagesize())
+        //nr, _, err := Recvfrom(s, rb, MSG_PEEK|MSG_DONTWAIT)
+        nr, _, err := s.Recvfrom(sock, rb, 0)
         if err != nil {
             fmt.Println("rec err: ", err)
             return
         }
-        if nr < NLMSG_HDRLEN {
-            fmt.Println(EINVAL)
+        if nr < s.NLMSG_HDRLEN {
+            fmt.Println(s.EINVAL)
             fmt.Println("nr < nlmsg hdrlen")
             return
         }
         rb = rb[:nr]
         tab = append(tab, rb...)
-        msgs, err := ParseNetlinkMessage(rb)
+        msgs, err := s.ParseNetlinkMessage(rb)
 
         if err != nil {
             fmt.Println("parse error:", err)
@@ -91,30 +91,30 @@ done:
 
         for _, m := range msgs {
  
-            lsa, err := Getsockname(s)
+            lsa, err := s.Getsockname(sock)
             if err != nil {
                 fmt.Println("get socket name error:", err)
                 return
             }
 
             switch v := lsa.(type) {
-            case *SockaddrNetlink:
+            case *s.SockaddrNetlink:
                 if m.Header.Seq != 1 || m.Header.Pid != v.Pid {
                     fmt.Println("case")
-                    fmt.Println(EINVAL)
+                    fmt.Println(s.EINVAL)
                     return 
                 }
             default:
-                fmt.Println(EINVAL)
+                fmt.Println(s.EINVAL)
                 fmt.Println("default case")
                 return
             }
-            if m.Header.Type == NLMSG_DONE {
+            if m.Header.Type == s.NLMSG_DONE {
                 break done
             }
 
-            if m.Header.Type == NLMSG_ERROR {
-                fmt.Println(EINVAL)
+            if m.Header.Type == s.NLMSG_ERROR {
+                fmt.Println(s.EINVAL)
                 fmt.Println("somewhere below")
                 return
             }
