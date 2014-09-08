@@ -56,7 +56,7 @@ func main() {
     // sendto(fd, &req, req.nlh.nlmsg_len, 0,(struct sockaddr*)&addr, sizeof(addr))
     // sendto(3, "\20\0\0\0\350\3\5\0\1\0\0\0\0\0\0\0", 16, 0, {sa_family=AF_NETLINK, pid=0, groups=00000000}, 12) = 16
     // sendto(3, "\20\0\0\0\350\3\1\0\1\0\0\0\0\0\0\0", 16, 0, {sa_family=AF_NETLINK, pid=0, groups=00000000}, 12) = 16
-    wb := newNetlinkAuditRequest(1120, 1, s.NETLINK_AUDIT)
+    wb := newNetlinkAuditRequest(1000, 1, s.NETLINK_AUDIT)
     if err := s.Sendto(sock, wb, 0, lsa); err != nil {
         fmt.Println("sending error: ", err)
         return
